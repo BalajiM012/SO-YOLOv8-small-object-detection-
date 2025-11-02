@@ -1,0 +1,1 @@
+conda activate your_env_name

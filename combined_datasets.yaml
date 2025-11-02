@@ -1,0 +1,40 @@
+names:
+- aeroplane
+- bicycle
+- bird
+- boat
+- bottle
+- bus
+- car
+- cat
+- chair
+- cow
+- diningtable
+- dog
+- horse
+- motorbike
+- person
+- pottedplant
+- sheep
+- sofa
+- train
+- tvmonitor
+- pedestrian
+- people
+- van
+- truck
+- tricycle
+- awning-tricycle
+- motor
+- others
+nc: 28
+path: D:\MINI Project Phase 1\Object Detection DL\Object DL DATASETS\SO - YOLO\Pascal
+  VOC 2012 UK
+train:
+- images/train
+- VisDrone2019-DET-train\images
+- train\images
+val:
+- images/val
+- VisDrone2019-DET-val\images
+- valid\images
