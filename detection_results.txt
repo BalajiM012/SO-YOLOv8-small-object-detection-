@@ -1,0 +1,15 @@
+Detection Results:
+  Image: C:\Users\admin\Desktop\0000025_03777_d_0000005.jpg
+  Detected objects: 12
+    - car: 0.86
+    - car: 0.85
+    - person: 0.83
+    - person: 0.80
+    - person: 0.78
+    - car: 0.75
+    - car: 0.72
+    - car: 0.67
+    - car: 0.66
+    - car: 0.53
+    - truck: 0.29
+    - motorcycle: 0.25
