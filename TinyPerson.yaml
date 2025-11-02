@@ -1,0 +1,6 @@
+path: TinyPerson\TinyPerson -YOLO format-.v1i.yolov8
+train: train\images
+val: valid\images
+
+names:
+  0: person
