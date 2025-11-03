@@ -133,9 +133,9 @@ class AdvancedPostProcessor:
         large_keep = self.nms(torch.tensor(large_boxes), torch.tensor(large_scores), 0.5)  # Relaxed for large objects
 
         # Combine results
-        final_boxes = small_boxes[small_keep] + large_boxes[large_keep]
-        final_scores = small_scores[small_keep] + large_scores[large_keep]
-        final_classes = small_classes[small_keep] + large_classes[large_keep]
+        final_boxes = [small_boxes[i] for i in small_keep] + [large_boxes[i] for i in large_keep]
+        final_scores = [small_scores[i] for i in small_keep] + [large_scores[i] for i in large_keep]
+        final_classes = [small_classes[i] for i in small_keep] + [large_classes[i] for i in large_keep]
 
         return final_boxes, final_scores, final_classes
 
