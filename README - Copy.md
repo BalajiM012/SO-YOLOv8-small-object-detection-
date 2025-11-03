@@ -1,12 +1,20 @@
-# YOLOv8 Small-Object Training (VOC 2012 + Multi-Dataset)
+---
+noteId: "a57cc440b8c911f08966a38f1d154de1"
+tags: []
 
-This project sets up and runs YOLOv8 training for small-object detection on the PASCAL VOC 2012 dataset, with optional multi-dataset training support.
+---
 
-## Dataset
+# YOLO v8 Training on PASCAL VOC 2012 Dataset
 
-Primary dataset: PASCAL VOC 2012 (20 classes): aeroplane, bicycle, bird, boat, bottle, bus, car, cat, chair, cow, diningtable, dog, horse, motorbike, person, pottedplant, sheep, sofa, train, tvmonitor.
+This project sets up and runs YOLO v8 training on the PASCAL VOC 2012 dataset.
 
-Note: Exact train/val image counts may vary depending on your split and conversion; verify after conversion in the generated `dataset/` folders.
+## Dataset Structure
+
+The PASCAL VOC 2012 dataset contains:
+
+- **Training images**: 5,717 images
+- **Validation images**: 5,823 images
+- **Classes**: 20 object categories (aeroplane, bicycle, bird, boat, bottle, bus, car, cat, chair, cow, diningtable, dog, horse, motorbike, person, pottedplant, sheep, sofa, train, tvmonitor)
 
 ## Setup Instructions
 
@@ -46,7 +54,7 @@ dataset/
 └── dataset.yaml   # Dataset configuration
 ```
 
-### 4. Start Training (Single Dataset)
+### 4. Start Training
 
 ```bash
 python train_yolo.py
@@ -73,7 +81,7 @@ The ultimate trainer uses the following key parameters (from `ultimate_small_obj
 
 Training will create:
 
-- Model checkpoints every 5 epochs
+- Model checkpoints every 10 epochs
 - Training plots and metrics
 - Best model saved automatically
 - Validation results after training
@@ -138,15 +146,21 @@ results = trainer.test_ultimate_model(model_path, 'test_images/', max_images=100
 print(f"Average detections per image: {sum(r['detections'] for r in results) / len(results):.2f}")
 ```
 
-#### Multi-Dataset Training
+#### Ensemble Training
 
-To combine multiple datasets into a single training run, use the provided script:
+```python
+# Train on multiple datasets
+trained_models = []
+datasets = ['voc2012.yaml', 'visdrone.yaml', 'tinyperson.yaml']
 
-```bash
-python run_multi_dataset_training.py
+for dataset in datasets:
+    if os.path.exists(dataset):
+        model, path = trainer.train_ultimate_model(dataset, epochs=200)
+        trained_models.append(path)
+
+# Ensemble evaluation
+precision, recall, map50 = trainer.ensemble_models(trained_models, 'test_data')
 ```
-
-This will generate a combined YAML from configured datasets in `enhanced_small_object_yolo.MULTI_DATASET_CONFIGS` and train using `UltimateSmallObjectTrainer`.
 
 ### Target Performance
 
@@ -186,3 +200,7 @@ Key parameters include multi-scale training, advanced augmentations, optimized l
 - CUDA-capable GPU (recommended)
 - 8GB+ RAM
 - 10GB+ free disk space
+  noteId: "db07f7c0865511f09dd2bb9b06426801"
+  tags: []
+
+---

@@ -16,6 +16,7 @@ import gc
 from collections import defaultdict
 import json
 from datetime import datetime
+import cv2
 from data_quality_utils import DataQualityChecker, analyze_class_distribution, balance_classes
 from enhanced_small_object_yolo import add_se_and_c2f_to_yolo
 from custom_dataset import BlurAugmentationDataset
@@ -136,6 +137,11 @@ class AdvancedPostProcessor:
         final_boxes = [small_boxes[i] for i in small_keep] + [large_boxes[i] for i in large_keep]
         final_scores = [small_scores[i] for i in small_keep] + [large_scores[i] for i in large_keep]
         final_classes = [small_classes[i] for i in small_keep] + [large_classes[i] for i in large_keep]
+
+        # Convert each box to list if it's a numpy array
+        final_boxes = [box.tolist() if hasattr(box, 'tolist') else box for box in final_boxes]
+        final_scores = [score.tolist() if hasattr(score, 'tolist') else score for score in final_scores]
+        final_classes = [cls.tolist() if hasattr(cls, 'tolist') else cls for cls in final_classes]
 
         return final_boxes, final_scores, final_classes
 
@@ -553,6 +559,146 @@ class UltimateSmallObjectTrainer:
 
         return results
 
+    def detect_from_webcam(self, model_path, camera_id=0, conf_threshold=0.25, iou_threshold=0.45, max_det=1000):
+        """Real-time object detection from webcam with advanced post-processing"""
+
+        print("Starting real-time object detection from webcam...")
+        print("Press 'q' to quit")
+
+        # Load the model
+        model = YOLO(model_path)
+
+        # Open webcam
+        cap = cv2.VideoCapture(camera_id)
+        if not cap.isOpened():
+            print(f"Error: Could not open camera {camera_id}")
+            return
+
+        # Get camera properties
+        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+
+        print(f"Camera opened: {frame_width}x{frame_height} @ {fps} FPS")
+
+        # Performance tracking
+        frame_count = 0
+        total_inference_time = 0
+
+        try:
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    print("Error: Could not read frame")
+                    break
+
+                frame_count += 1
+                start_time = cv2.getTickCount()
+
+                # Run inference
+                results = model(frame, conf=conf_threshold, iou=iou_threshold, max_det=max_det, verbose=False)
+
+                inference_time = (cv2.getTickCount() - start_time) / cv2.getTickFrequency()
+                total_inference_time += inference_time
+
+                # Process results
+                if len(results) > 0 and len(results[0].boxes) > 0:
+                    boxes = results[0].boxes.xyxy.cpu().numpy()
+                    scores = results[0].boxes.conf.cpu().numpy()
+                    classes = results[0].boxes.cls.cpu().numpy()
+
+                    # Apply advanced post-processing
+                    final_boxes, final_scores, final_classes = self.post_processor.apply_adaptive_nms(
+                        boxes, scores, classes, (frame_width, frame_height)
+                    )
+
+                    # Sort detections by confidence (highest first)
+                    detections = list(zip(final_boxes, final_scores, final_classes))
+                    detections.sort(key=lambda x: x[1], reverse=True)
+
+                    # Draw detections with enhanced display
+                    small_count = 0
+                    large_count = 0
+
+                    for i, (box, score, cls) in enumerate(detections):
+                        x1, y1, x2, y2 = map(int, box)
+                        class_name = model.names[int(cls)]
+                        area = (x2 - x1) * (y2 - y1)
+
+                        # Color based on object size (small objects in red, large in green)
+                        if area < 32*32:
+                            color = (0, 0, 255)  # Red for small objects
+                            small_count += 1
+                        else:
+                            color = (0, 255, 0)  # Green for large objects
+                            large_count += 1
+
+                        # Enhanced label with detection number and size info
+                        size_indicator = "S" if area < 32*32 else "L"
+                        label = f"#{i+1} {class_name}: {score:.2f} ({size_indicator})"
+
+                        # Draw bounding box with thicker lines for better visibility
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
+
+                        # Draw label with background for better readability
+                        (label_width, label_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+                        cv2.rectangle(frame, (x1, y1 - label_height - baseline), (x1 + label_width, y1), color, -1)
+                        cv2.putText(frame, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+                        # Draw detection number in center of box
+                        center_x = (x1 + x2) // 2
+                        center_y = (y1 + y2) // 2
+                        cv2.putText(frame, str(i+1), (center_x - 10, center_y + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
+                    # Enhanced detection statistics display
+                    detection_count = len(final_boxes)
+                    y_offset = 30
+
+                    # Main detection count
+                    cv2.putText(frame, f"Total Detections: {detection_count}", (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                    y_offset += 30
+
+                    # Size breakdown
+                    cv2.putText(frame, f"Small Objects: {small_count}", (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                    y_offset += 25
+                    cv2.putText(frame, f"Large Objects: {large_count}", (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    y_offset += 25
+
+                    # Top detection info
+                    if detections:
+                        top_box, top_score, top_cls = detections[0]
+                        top_class = model.names[int(top_cls)]
+                        cv2.putText(frame, f"Top: {top_class} ({top_score:.2f})", (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+
+                else:
+                    cv2.putText(frame, "No detections", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+
+                # Display FPS
+                avg_fps = frame_count / total_inference_time if total_inference_time > 0 else 0
+                cv2.putText(frame, f"FPS: {avg_fps:.1f}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+
+                # Show frame
+                cv2.imshow('Ultimate Small Object Detection', frame)
+
+                # Check for quit key
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
+        except KeyboardInterrupt:
+            print("Interrupted by user")
+
+        finally:
+            # Cleanup
+            cap.release()
+            cv2.destroyAllWindows()
+
+            # Print final statistics
+            avg_fps = frame_count / total_inference_time if total_inference_time > 0 else 0
+            print("Real-time detection completed!")
+            print(f"Processed {frame_count} frames")
+            print(f"Average FPS: {avg_fps:.1f}")
+            print(f"Average inference time: {total_inference_time/frame_count*1000:.1f} ms per frame")
+
 def main():
     """Main function for ultimate small object detection with multiple datasets and ensemble"""
 
@@ -604,6 +750,12 @@ def main():
             print("Targets not fully met, further optimization needed.")
 
     print("Ultimate small object detection training and testing completed!")
+
+    # Optional: Start real-time detection if model is available
+    if trained_models:
+        print("\nStarting real-time detection from webcam...")
+        print("Use the trained model for live detection")
+        trainer.detect_from_webcam(trained_models[0])  # Use first trained model
 
 # Multi-dataset configuration
 MULTI_DATASET_CONFIGS = {
